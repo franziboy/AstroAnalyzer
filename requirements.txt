@@ -8,3 +8,4 @@ python-docx>=1.0
 scikit-image>=0.21
 astroplan>=0.9
 matplotlib>=3.7
+astroquery>=0.4

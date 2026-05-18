@@ -71,6 +71,12 @@ def write_markdown(all_results: dict, output_path: str, meta: dict) -> str:
     for b in b1:
         lines.append(f"| {b['thema']} | {b['wert']} | {b['status']} | {b['hinweis']} |")
 
+    _sky_str   = f"{r1['sky_median']:.6g}"     if r1.get('sky_median')    is not None else "?"
+    _noise_str = f"{r1['noise_mad']:.3g}"      if r1.get('noise_mad')     is not None else "?"
+    _grad_str  = f"{r1['gradient_pct']:.1f}"   if r1.get('gradient_pct')  is not None else "?"
+    _gsig_str  = f"{r1['gradient_sigma']:.1f}" if r1.get('gradient_sigma') is not None else "?"
+    _band_str  = f"{r1['banding_amp']:.3g}"    if r1.get('banding_amp')   is not None else "?"
+
     lines += [
         f"",
         f"### Detailmesswerte",
@@ -81,10 +87,10 @@ def write_markdown(all_results: dict, output_path: str, meta: dict) -> str:
         f"| FWHM Zentrum / Rand | {r1.get('fwhm_center_px','?')} / {r1.get('fwhm_edge_px','?')} px |",
         f"| Feldvariation FWHM | Δ {r1.get('fwhm_field_delta','?')} px |",
         f"| Exzentrizität (med / p90) | {r1.get('ecc_median','?')} / {r1.get('ecc_p90','?')} |",
-        f"| Hintergrund-Median | {r1.get('sky_median','?'):.6g} |",
-        f"| Rauschen (MAD) | {r1.get('noise_mad','?'):.3g} |",
-        f"| Gradient | {r1.get('gradient_pct','?'):.1f}% ({r1.get('gradient_sigma','?'):.1f}σ) |",
-        f"| Banding-Amplitude | {r1.get('banding_amp','?'):.3g} |",
+        f"| Hintergrund-Median | {_sky_str} |",
+        f"| Rauschen (MAD) | {_noise_str} |",
+        f"| Gradient | {_grad_str}% ({_gsig_str}σ) |",
+        f"| Banding-Amplitude | {_band_str} |",
         f"| Gesättigte Pixel | {r1.get('sat_pixels','?')} |",
         f"| Vermessene Sterne | {r1.get('n_stars_measured','?')} |",
         f"",
@@ -142,11 +148,13 @@ def write_markdown(all_results: dict, output_path: str, meta: dict) -> str:
     fm = r4.get("flat_mismatch", {})
 
     _ag = f"{dk['amp_glow']:.2e}" if dk.get('amp_glow') else '—'
+    _hp = dk.get('hot_px_pct')
+    _hp_str = f"{_hp:.2f}%" if _hp is not None else "—"
     lines += [
         f"| Prüfung | Wert | Bewertung |",
         f"|---------|------|-----------|",
         f"| Dark: Amp-Glow | {_ag} | {dk.get('bewertung','—')} |",
-        f"| Dark: Warmpixel | {dk.get('hot_px_pct','—'):.2f}% | {'✅' if not dk.get('hot_px_warn') else '⚠️'} |",
+        f"| Dark: Warmpixel | {_hp_str} | {'✅' if not dk.get('hot_px_warn') else '⚠️'} |",
         f"| Flat: Asymmetrie | {fl.get('asymmetrie_pct','—')}% | {fl.get('bewertung','—')} |",
         f"| Flat: Staubschatten | {fl.get('dust_amp_pct','—')}% | {'✅' if (fl.get('dust_amp_pct') or 0) < 1 else '⚠️'} |",
         f"| Flat-Mismatch corr | {fm.get('korrelation','—')} | {'⚠️ Mismatch!' if fm.get('warnung') else '✅ OK'} |",
@@ -300,9 +308,11 @@ def write_docx(all_results: dict, output_path: str, meta: dict) -> None:
     h1("4. Kalibrierung")
     dk = r4.get("dark", {}); fl = r4.get("flat", {}); fm = r4.get("flat_mismatch", {})
     _ag = f"{dk['amp_glow']:.2e}" if dk.get('amp_glow') else '—'
+    _hp = dk.get('hot_px_pct')
+    _hp_str = f"{_hp:.2f}%" if _hp is not None else "—"
     table_2col([
         ["Dark: Amp-Glow",   f"{_ag}   {dk.get('bewertung','—')}"],
-        ["Dark: Warmpixel",  f"{dk.get('hot_px_pct','—'):.2f}%"],
+        ["Dark: Warmpixel",  _hp_str],
         ["Flat: Asymmetrie", f"{fl.get('asymmetrie_pct','—')}%   {fl.get('bewertung','—')}"],
         ["Flat-Mismatch",    f"corr = {fm.get('korrelation','—')}   {'⚠️' if fm.get('warnung') else '✅'}"],
     ], header=["Prüfung", "Ergebnis"])

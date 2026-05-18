@@ -61,14 +61,16 @@ class AstroAnalyzerApp(tk.Tk):
         self.var_n_subs        = tk.IntVar(value=0)
         self.var_dither_active = tk.BooleanVar(value=True)
         self.var_dither_px     = tk.IntVar(value=0)
+        self.var_finder_fov    = tk.StringVar(value="5")
         self.var_fmt_md    = tk.BooleanVar(value=True)
         self.var_fmt_docx  = tk.BooleanVar(value=True)
         self.var_fmt_csv   = tk.BooleanVar(value=True)
         self.var_fmt_png   = tk.BooleanVar(value=True)
         self.var_fmt_js    = tk.BooleanVar(value=True)
         self.var_fmt_sky   = tk.BooleanVar(value=True)
+        self.var_fmt_fc    = tk.BooleanVar(value=False)
 
-        self.var_mod = {i: tk.BooleanVar(value=True) for i in range(1, 6)}
+        self.var_mod = {i: tk.BooleanVar(value=True) for i in range(1, 8)}
 
         self._build_styles()
         self._build_menu()
@@ -221,40 +223,56 @@ class AstroAnalyzerApp(tk.Tk):
 
         # Module
         mod_frm = tk.LabelFrame(frm, text=" Analysemodule ", bg=DARK_BG,
-                                 fg=ACCENT, font=FONT_H2, padx=16, pady=12)
-        mod_frm.pack(fill="x", pady=(0,16))
+                                 fg=ACCENT, font=FONT_H2, padx=10, pady=6)
+        mod_frm.pack(fill="x", pady=(0,8))
 
-        mod_labels = {
-            1: "Modul 1 – Technische Bildanalyse (FWHM, Rauschen, Gradient, Banding)",
-            2: "Modul 2 – Aufnahmetechnik (Gain, Sub-Länge, Tiefe, Dithering)",
-            3: "Modul 3 – PixInsight-Optimierungsvorschläge (mit Begründungen)",
-            4: "Modul 4 – Kalibrierungskette (Dark/Flat/Flat-Mismatch-Test)",
-            5: "Modul 5 – Hauptobjekte / Galaxienanalyse (NGC/IC + PGC-Kandidaten)",
+        mod_info = {
+            1: ("Modul 1 – Technische Bildanalyse",
+                "FWHM · Exzentrizität · Rauschen · Gradient · Banding · Sättigung"),
+            2: ("Modul 2 – Aufnahmetechnik",
+                "Gain-Regime · Sub-Länge · Gesamttiefe · Dithering · Temperatur"),
+            3: ("Modul 3 – PixInsight-Optimierung",
+                "17 Schritte mit konkreten Parametern und Begründungen aus Messwerten"),
+            4: ("Modul 4 – Kalibrierungskette",
+                "MasterDark · MasterFlat · Flat-Mismatch-Test (Korrelation)"),
+            5: ("Modul 5 – Galaxienanalyse",
+                "NGC/IC-Abgleich · PGC-Kandidaten · Objektbeschreibungen · Tiefenkarte"),
+            6: ("Modul 6 – PixInsight PJSR-Script",
+                "Lauffähiges .js-Script mit BlurXT/NoiseXT/GHS-Parametern aus Messwerten"),
+            7: ("Modul 7 – Himmelskarte",
+                "Vollhimmel-Position · N/E-Orientierung · Sichtbarkeits-Chart"),
         }
-        for i, lbl in mod_labels.items():
-            cb = ttk.Checkbutton(mod_frm, text=lbl, variable=self.var_mod[i],
-                                 style="TCheckbutton")
-            cb.pack(anchor="w", pady=3)
+        for i, (title, desc) in mod_info.items():
+            row = tk.Frame(mod_frm, bg=DARK_BG)
+            row.pack(anchor="w", fill="x", pady=(4, 0))
+            ttk.Checkbutton(row, text=title, variable=self.var_mod[i],
+                            style="TCheckbutton").pack(anchor="w")
+            tk.Label(row, text="    " + desc, bg=DARK_BG, fg=LABEL_FG,
+                     font=FONT_HINT).pack(anchor="w")
 
         # Ausgabeformate
         fmt_frm = tk.LabelFrame(frm, text=" Ausgabeformate ", bg=DARK_BG,
-                                 fg=ACCENT, font=FONT_H2, padx=16, pady=12)
-        fmt_frm.pack(fill="x", pady=(0,16))
+                                 fg=ACCENT, font=FONT_H2, padx=10, pady=6)
+        fmt_frm.pack(fill="x", pady=(0,8))
 
-        fmt_row = tk.Frame(fmt_frm, bg=DARK_BG)
-        fmt_row.pack(fill="x")
-        for var, lbl in [(self.var_fmt_md,   "📄 Markdown (.md)"),
-                         (self.var_fmt_docx, "📝 Word (.docx)"),
-                         (self.var_fmt_csv,  "📊 CSV Galaxienliste"),
-                         (self.var_fmt_png,  "🗺️ Tiefenkarte (.png)"),
-                         (self.var_fmt_js,   "📜 PixInsight-Script (.js)"),
-                         (self.var_fmt_sky,  "🌐 Himmelskarte (.png)")]:
-            ttk.Checkbutton(fmt_row, text=lbl, variable=var,
-                            style="TCheckbutton").pack(side="left", padx=16)
+        for row_items in [
+            [(self.var_fmt_md,   "📄 Markdown (.md)"),
+             (self.var_fmt_docx, "📝 Word (.docx)"),
+             (self.var_fmt_csv,  "📊 CSV Galaxienliste"),
+             (self.var_fmt_png,  "🗺️ Tiefenkarte (.png)")],
+            [(self.var_fmt_js,   "📜 PixInsight-Script (.js)"),
+             (self.var_fmt_sky,  "🌐 Himmelskarte (.png)"),
+             (self.var_fmt_fc,   "🔭 Finder Chart (DSS, Netz)")],
+        ]:
+            row = tk.Frame(fmt_frm, bg=DARK_BG)
+            row.pack(fill="x", pady=(0, 2))
+            for var, lbl in row_items:
+                ttk.Checkbutton(row, text=lbl, variable=var,
+                                style="TCheckbutton").pack(side="left", padx=12)
 
         # Zusatz
         add_frm = tk.LabelFrame(frm, text=" Zusatzparameter ", bg=DARK_BG,
-                                  fg=ACCENT, font=FONT_H2, padx=16, pady=12)
+                                  fg=ACCENT, font=FONT_H2, padx=10, pady=6)
         add_frm.pack(fill="x")
         row = tk.Frame(add_frm, bg=DARK_BG)
         row.pack(fill="x")
@@ -265,6 +283,17 @@ class AstroAnalyzerApp(tk.Tk):
         tk.Label(row, text="Tipp: Falls NCOMBINE nicht im Header steht",
                  bg=DARK_BG, fg=LABEL_FG, font=FONT_HINT).pack(
                      side="left", padx=10)
+
+        row_fc = tk.Frame(add_frm, bg=DARK_BG)
+        row_fc.pack(fill="x", pady=(10, 0))
+        tk.Label(row_fc, text="Finder/Skymap FOV:",
+                 bg=DARK_BG, fg=TEXT_FG, font=FONT_BODY).pack(side="left")
+        for deg in ["5", "10", "20", "30", "45"]:
+            ttk.Radiobutton(row_fc, text=f"{deg}°",
+                            variable=self.var_finder_fov,
+                            value=deg).pack(side="left", padx=8)
+        tk.Label(row_fc, text="Gesamtfeld für DSS + Skymap",
+                 bg=DARK_BG, fg=LABEL_FG, font=FONT_HINT).pack(side="left", padx=10)
 
 
     # ── Tab 3: Analyse ─────────────────────────────────────────────────────
@@ -336,12 +365,12 @@ class AstroAnalyzerApp(tk.Tk):
         ]
         for col, (title, builder) in enumerate(cards):
             card = tk.Frame(self.results_frame, bg=PANEL_BG, bd=1,
-                            relief="flat", padx=12, pady=12)
-            card.grid(row=0, column=col, sticky="nsew", padx=5, pady=5)
+                            relief="flat", padx=6, pady=6)
+            card.grid(row=0, column=col, sticky="nsew", padx=2, pady=2)
             self.results_frame.columnconfigure(col, weight=1)
             self.results_frame.rowconfigure(0, weight=1)
             tk.Label(card, text=title, bg=PANEL_BG, fg=ACCENT,
-                     font=FONT_H2).pack(anchor="w", pady=(0,8))
+                     font=("Helvetica", 17, "bold")).pack(anchor="w", pady=(0,4))
             builder(card)
 
     def _card_m1(self, parent):
@@ -362,9 +391,9 @@ class AstroAnalyzerApp(tk.Tk):
             row = tk.Frame(parent, bg=PANEL_BG)
             row.pack(fill="x", pady=2)
             tk.Label(row, text=k+":", bg=PANEL_BG, fg=LABEL_FG,
-                     font=FONT_BODY, width=14, anchor="w").pack(side="left")
+                     font=FONT_HINT, width=12, anchor="w").pack(side="left")
             tk.Label(row, text=v, bg=PANEL_BG, fg=TEXT_FG,
-                     font=FONT_BODY).pack(side="left")
+                     font=FONT_HINT).pack(side="left")
 
     def _card_m2(self, parent):
         r = self.results.get("m2", {})
@@ -383,9 +412,9 @@ class AstroAnalyzerApp(tk.Tk):
         ]
         for k, v in items:
             row = tk.Frame(parent, bg=PANEL_BG); row.pack(fill="x", pady=2)
-            tk.Label(row, text=k+":", bg=PANEL_BG, fg=LABEL_FG, font=FONT_BODY,
-                     width=14, anchor="w").pack(side="left")
-            tk.Label(row, text=v, bg=PANEL_BG, fg=TEXT_FG, font=FONT_BODY).pack(side="left")
+            tk.Label(row, text=k+":", bg=PANEL_BG, fg=LABEL_FG,
+                     font=FONT_HINT, width=12, anchor="w").pack(side="left")
+            tk.Label(row, text=v, bg=PANEL_BG, fg=TEXT_FG, font=FONT_HINT).pack(side="left")
 
     def _card_m3(self, parent):
         r3 = self.results.get("m3", [])
@@ -414,10 +443,10 @@ class AstroAnalyzerApp(tk.Tk):
         ]
         for k, v in items:
             row = tk.Frame(parent, bg=PANEL_BG); row.pack(fill="x", pady=2)
-            tk.Label(row, text=k+":", bg=PANEL_BG, fg=LABEL_FG, font=FONT_BODY,
-                     width=14, anchor="w").pack(side="left")
+            tk.Label(row, text=k+":", bg=PANEL_BG, fg=LABEL_FG,
+                     font=FONT_HINT, width=12, anchor="w").pack(side="left")
             col = RED if "⚠️" in str(v) else (GREEN if "✅" in str(v) else TEXT_FG)
-            tk.Label(row, text=v, bg=PANEL_BG, fg=col, font=FONT_BODY).pack(side="left")
+            tk.Label(row, text=v, bg=PANEL_BG, fg=col, font=FONT_HINT).pack(side="left")
 
     def _card_m5(self, parent):
         r5 = self.results.get("m5", {})
@@ -433,9 +462,9 @@ class AstroAnalyzerApp(tk.Tk):
         ]
         for k, v in items:
             row = tk.Frame(parent, bg=PANEL_BG); row.pack(fill="x", pady=2)
-            tk.Label(row, text=k+":", bg=PANEL_BG, fg=LABEL_FG, font=FONT_BODY,
-                     width=14, anchor="w").pack(side="left")
-            tk.Label(row, text=v, bg=PANEL_BG, fg=TEXT_FG, font=FONT_BODY).pack(side="left")
+            tk.Label(row, text=k+":", bg=PANEL_BG, fg=LABEL_FG,
+                     font=FONT_HINT, width=12, anchor="w").pack(side="left")
+            tk.Label(row, text=v, bg=PANEL_BG, fg=TEXT_FG, font=FONT_HINT).pack(side="left")
 
     # ── Analyse-Thread ─────────────────────────────────────────────────────
 
@@ -464,6 +493,7 @@ class AstroAnalyzerApp(tk.Tk):
             "n_subs_override":  self.var_n_subs.get(),
             "dither_active":    self.var_dither_active.get(),
             "dither_px":        self.var_dither_px.get(),
+            "finder_fov":       float(self.var_finder_fov.get()),
             "output_dir":      self.var_output.get(),
             "obsidian_path":   self.var_obsidian.get() or None,
             "output_formats": [
@@ -472,10 +502,11 @@ class AstroAnalyzerApp(tk.Tk):
                                 ("csv",      self.var_fmt_csv),
                                 ("png",      self.var_fmt_png),
                                 ("pixinsight", self.var_fmt_js),
-                                ("skymap",     self.var_fmt_sky)]
+                                ("skymap",     self.var_fmt_sky),
+                                ("finderchart", self.var_fmt_fc)]
                 if v.get()
             ],
-            "modules_enabled": [i for i in range(1, 6) if self.var_mod[i].get()],
+            "modules_enabled": [i for i in range(1, 8) if self.var_mod[i].get()],
         }
 
         lights = self.multi_lights if self.multi_lights else [("", cfg["light_path"])]
@@ -513,6 +544,7 @@ class AstroAnalyzerApp(tk.Tk):
                         obsidian_path   = cfg["obsidian_path"],
                         dither_active   = cfg["dither_active"],
                         dither_px       = cfg["dither_px"],
+                        finder_fov      = cfg["finder_fov"],
                     )
 
                 self.progress_queue.put(("done", last_res))

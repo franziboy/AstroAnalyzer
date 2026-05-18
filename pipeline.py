@@ -21,6 +21,7 @@ def run_pipeline(
     obsidian_path: str | None = None,
     dither_active: bool = True,
     dither_px: int = 0,
+    finder_fov: float = 10.0,
 ) -> dict:
     """
     Zentrale Pipeline. Gibt dict mit allen Ergebnissen zurück.
@@ -184,7 +185,7 @@ def run_pipeline(
         written.append(png_path)
         results["png_path"] = png_path
 
-    if "pixinsight" in output_formats and 1 in modules_enabled:
+    if "pixinsight" in output_formats and 6 in modules_enabled:
         pg(97, "PixInsight-Script generieren …")
         from modules.m6_pi_script import run as m6_run
         js_path = os.path.join(output_dir, f"{base}_Workflow.js")
@@ -193,15 +194,26 @@ def run_pipeline(
                meta=meta, output_path=js_path)
         written.append(js_path); results["js_path"] = js_path
 
-    if "skymap" in output_formats:
+    if "skymap" in output_formats and 7 in modules_enabled:
         pg(98, "Himmelskarte …")
         from modules.m7_skymap import run as m7_run
         sky_path = os.path.join(output_dir, f"{base}_Skymap.png")
         m7_run(meta, wcs,
                (meta.get("HEIGHT", 6388), meta.get("WIDTH", 9576)),
-               sky_path, progress_cb=lambda p, m: pg(98 + p*0.02, m))
+               sky_path, fov_deg=finder_fov,
+               progress_cb=lambda p, m: pg(98 + p*0.02, m))
         written.append(sky_path)
         results["sky_path"] = sky_path
+
+    if "finderchart" in output_formats and 7 in modules_enabled:
+        pg(99, "Finder Chart …")
+        from modules.m7_finder import finder_chart
+        fc_path = os.path.join(output_dir, f"{base}_FinderChart.png")
+        finder_chart(meta, wcs,
+                     (meta.get("HEIGHT", 6388), meta.get("WIDTH", 9576)),
+                     fc_path, fov_deg=finder_fov,
+                     progress_cb=lambda p, m: pg(99 + p*0.01, m))
+        written.append(fc_path)
 
     results["written_files"] = written
     pg(100, f"Fertig. {len(written)} Dateien geschrieben.")

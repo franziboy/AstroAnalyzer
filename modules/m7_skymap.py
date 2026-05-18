@@ -34,7 +34,8 @@ ALT_COL   = "#6bcb6b"
 
 
 def run(meta: dict, wcs, img_shape: tuple,
-        output_path: str, progress_cb=None) -> bool:
+        output_path: str, fov_deg: float = 10.0,
+        progress_cb=None) -> bool:
     """
     meta       : Header-Dict aus xisf_reader
     wcs        : astropy.wcs.WCS (kann None sein)
@@ -378,6 +379,170 @@ def run(meta: dict, wcs, img_shape: tuple,
     plt.close(fig)
     pg(100, f"Himmelskarte gespeichert: {output_path}")
     return True
+
+
+def finder_chart(meta: dict, wcs, img_shape: tuple,
+                 output_path: str, survey: str = "DSS2 Red",
+                 fov_factor: float = 3.0) -> bool:
+    """
+    Lädt DSS-Hintergrundbild und zeichnet FOV-Rechteck des eigenen Bildes ein.
+    fov_factor: wie viel größer als das eigene FOV der Finder-Chart sein soll
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    import math, warnings
+    warnings.filterwarnings("ignore")
+
+    ra_deg  = None
+    dec_deg = None
+    if wcs is not None:
+        try:
+            H, W = img_shape
+            sk = wcs.pixel_to_world(W / 2, H / 2)
+            ra_deg  = float(sk.ra.deg)
+            dec_deg = float(sk.dec.deg)
+        except Exception:
+            pass
+    if ra_deg is None:
+        ra_deg  = float(meta.get("RA")  or 0)
+        dec_deg = float(meta.get("DEC") or 0)
+    if not ra_deg and not dec_deg:
+        return False
+
+    target = meta.get("OBJECT") or "Unbekannt"
+    filt   = meta.get("FILTER") or "?"
+
+    # FOV aus WCS
+    fov_w = fov_h = rot_deg = None
+    if wcs is not None:
+        try:
+            cd = wcs.wcs.cd
+            H, W = img_shape
+            fov_w = abs(cd[0][0]) * W
+            fov_h = abs(cd[1][1]) * H
+            rot_deg = math.degrees(math.atan2(cd[0][1], cd[0][0]))
+        except Exception:
+            pass
+
+    # Download-Radius
+    radius_deg = max(fov_w or 1.0, fov_h or 1.0) * fov_factor / 2
+
+    fig, ax = plt.subplots(figsize=(9, 9), facecolor="#08080f")
+    ax.set_facecolor("#08080f")
+
+    # DSS-Bild laden
+    dss_loaded = False
+    try:
+        from astroquery.skyview import SkyView
+        import astropy.units as u
+        from astropy.wcs import WCS as AWCS
+        from astropy.visualization import ZScaleInterval
+
+        hdu_list = SkyView.get_images(
+            position=f"{ra_deg} {dec_deg}",
+            survey=[survey],
+            radius=radius_deg * u.deg,
+            pixels=900,
+        )
+        if hdu_list:
+            hdu   = hdu_list[0][0]
+            data  = hdu.data.astype(float)
+            dss_wcs = AWCS(hdu.header)
+
+            # Stretch
+            interval = ZScaleInterval()
+            vmin, vmax = interval.get_limits(data)
+            ax.imshow(data, cmap="gray", origin="lower",
+                      vmin=vmin, vmax=vmax,
+                      extent=[0, data.shape[1], 0, data.shape[0]])
+
+            # FOV-Rechteck: Bildecken via WCS direkt auf DSS projizieren
+            if wcs is not None and fov_w and fov_h:
+                import astropy.units as u2
+                H_img, W_img = img_shape
+                px_corners = [(0, 0), (W_img, 0), (W_img, H_img),
+                              (0, H_img), (0, 0)]
+                corners_px_dss = []
+                for px_c, py_c in px_corners:
+                    sc = wcs.pixel_to_world(px_c, py_c)
+                    px_d, py_d = dss_wcs.world_to_pixel(sc)
+                    corners_px_dss.append((float(px_d), float(py_d)))
+
+                xs = [p[0] for p in corners_px_dss]
+                ys = [p[1] for p in corners_px_dss]
+                ax.plot(xs, ys, color="#FF4040", linewidth=2.0,
+                        label=f"Bildfeld ({fov_w:.2f}° × {fov_h:.2f}°)")
+                ax.fill(xs, ys, color="#FF4040", alpha=0.08)
+
+            # Objektmittelpunkt
+            from astropy.coordinates import SkyCoord
+            import astropy.units as u2
+            sc_cen = SkyCoord(ra_deg * u2.deg, dec_deg * u2.deg)
+            cx, cy = dss_wcs.world_to_pixel(sc_cen)
+            ax.plot(float(cx), float(cy), "+",
+                    color="#FFD700", ms=18, mew=2.5, zorder=10)
+
+            # N/E-Pfeile in DSS-Pixeln
+            arrow_len = data.shape[0] * 0.07
+            if rot_deg is not None:
+                r = math.radians(rot_deg)
+                sc_n = SkyCoord((ra_deg)*u2.deg,
+                                (dec_deg + arrow_len * abs(dss_wcs.wcs.cdelt[1]))*u2.deg)
+                nx, ny = dss_wcs.world_to_pixel(sc_n)
+                ax.annotate("", xy=(float(nx), float(ny)),
+                            xytext=(float(cx), float(cy)),
+                            arrowprops=dict(arrowstyle="->", color="#80FF80",
+                                           lw=2.0, mutation_scale=14))
+                ax.text(float(nx), float(ny), " N",
+                        color="#80FF80", fontsize=11, fontweight="bold", va="center")
+                sc_e = SkyCoord((ra_deg + arrow_len * abs(dss_wcs.wcs.cdelt[0]) /
+                                 math.cos(math.radians(dec_deg)))*u2.deg,
+                                dec_deg*u2.deg)
+                ex, ey = dss_wcs.world_to_pixel(sc_e)
+                ax.annotate("", xy=(float(ex), float(ey)),
+                            xytext=(float(cx), float(cy)),
+                            arrowprops=dict(arrowstyle="->", color="#FF9040",
+                                           lw=2.0, mutation_scale=12))
+                ax.text(float(ex), float(ey), " E",
+                        color="#FF9040", fontsize=10, fontweight="bold", va="center")
+
+            dss_loaded = True
+
+    except ImportError:
+        ax.text(0.5, 0.5,
+                "astroquery nicht installiert\npip install astroquery",
+                transform=ax.transAxes, color="#e0e8ff",
+                ha="center", va="center", fontsize=12)
+    except Exception as e:
+        ax.text(0.5, 0.5,
+                f"DSS-Download fehlgeschlagen\n({e})\n\nNetzverbindung prüfen",
+                transform=ax.transAxes, color="#FF8060",
+                ha="center", va="center", fontsize=11)
+
+    ax.tick_params(colors="#e0e8ff", labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_color("#1a1a3a")
+    ax.set_xlabel("Pixel", color="#e0e8ff", fontsize=9)
+    ax.set_ylabel("Pixel", color="#e0e8ff", fontsize=9)
+
+    survey_label = survey if dss_loaded else "kein Hintergrund"
+    ax.set_title(
+        f"Finder Chart — {target}  ·  {_ra_str(ra_deg)}  {_dec_str(dec_deg)}"
+        f"  ·  {filt}  ·  {survey_label}",
+        color="#e0e8ff", fontsize=10, fontweight="bold", pad=10
+    )
+    if dss_loaded:
+        ax.legend(fontsize=9, facecolor="#111122",
+                  labelcolor="#e0e8ff", edgecolor="#1a1a3a",
+                  loc="lower right")
+
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight",
+                facecolor="#08080f")
+    plt.close(fig)
+    return dss_loaded
 
 
 # ── Hilfsfunktionen ────────────────────────────────────────────────────────
