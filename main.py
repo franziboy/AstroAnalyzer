@@ -58,12 +58,15 @@ class AstroAnalyzerApp(tk.Tk):
         self.var_obsidian = tk.StringVar()
 
         # Konfig
-        self.var_n_subs    = tk.IntVar(value=0)
+        self.var_n_subs        = tk.IntVar(value=0)
+        self.var_dither_active = tk.BooleanVar(value=True)
+        self.var_dither_px     = tk.IntVar(value=0)
         self.var_fmt_md    = tk.BooleanVar(value=True)
         self.var_fmt_docx  = tk.BooleanVar(value=True)
         self.var_fmt_csv   = tk.BooleanVar(value=True)
         self.var_fmt_png   = tk.BooleanVar(value=True)
         self.var_fmt_js    = tk.BooleanVar(value=True)
+        self.var_fmt_sky   = tk.BooleanVar(value=True)
 
         self.var_mod = {i: tk.BooleanVar(value=True) for i in range(1, 6)}
 
@@ -193,6 +196,21 @@ class AstroAnalyzerApp(tk.Tk):
                  bg=DARK_BG, fg=LABEL_FG, font=FONT_HINT).grid(
                      row=8, column=1, sticky="w", padx=4)
 
+        row_d = tk.Frame(frm, bg=DARK_BG)
+        row_d.grid(row=10, column=0, columnspan=3, sticky="w", pady=(4, 0), padx=(0, 0))
+        tk.Label(row_d, text="Dithering:", bg=DARK_BG, fg=TEXT_FG,
+                 font=FONT_BODY, width=16, anchor="e").pack(side="left", padx=(0, 8))
+        ttk.Checkbutton(row_d, text="aktiv",
+                        variable=self.var_dither_active,
+                        style="TCheckbutton").pack(side="left")
+        tk.Label(row_d, text="Amplitude (px):",
+                 bg=DARK_BG, fg=TEXT_FG, font=FONT_BODY).pack(side="left", padx=(20, 0))
+        ttk.Spinbox(row_d, from_=0, to=100,
+                    textvariable=self.var_dither_px,
+                    width=5, font=FONT_BODY).pack(side="left", padx=6)
+        tk.Label(row_d, text="0 = unbekannt",
+                 bg=DARK_BG, fg=LABEL_FG, font=FONT_HINT).pack(side="left", padx=6)
+
         frm.columnconfigure(1, weight=1)
 
     # ── Tab 2: Konfiguration ───────────────────────────────────────────────
@@ -229,7 +247,8 @@ class AstroAnalyzerApp(tk.Tk):
                          (self.var_fmt_docx, "📝 Word (.docx)"),
                          (self.var_fmt_csv,  "📊 CSV Galaxienliste"),
                          (self.var_fmt_png,  "🗺️ Tiefenkarte (.png)"),
-                         (self.var_fmt_js,   "📜 PixInsight-Script (.js)")]:
+                         (self.var_fmt_js,   "📜 PixInsight-Script (.js)"),
+                         (self.var_fmt_sky,  "🌐 Himmelskarte (.png)")]:
             ttk.Checkbutton(fmt_row, text=lbl, variable=var,
                             style="TCheckbutton").pack(side="left", padx=16)
 
@@ -246,6 +265,7 @@ class AstroAnalyzerApp(tk.Tk):
         tk.Label(row, text="Tipp: Falls NCOMBINE nicht im Header steht",
                  bg=DARK_BG, fg=LABEL_FG, font=FONT_HINT).pack(
                      side="left", padx=10)
+
 
     # ── Tab 3: Analyse ─────────────────────────────────────────────────────
 
@@ -441,7 +461,9 @@ class AstroAnalyzerApp(tk.Tk):
             "dark_path":       self.var_dark.get() or None,
             "flat_path":       self.var_flat.get() or None,
             "flatdark_path":   self.var_flatdark.get() or None,
-            "n_subs_override": self.var_n_subs.get(),
+            "n_subs_override":  self.var_n_subs.get(),
+            "dither_active":    self.var_dither_active.get(),
+            "dither_px":        self.var_dither_px.get(),
             "output_dir":      self.var_output.get(),
             "obsidian_path":   self.var_obsidian.get() or None,
             "output_formats": [
@@ -449,7 +471,8 @@ class AstroAnalyzerApp(tk.Tk):
                                 ("docx",     self.var_fmt_docx),
                                 ("csv",      self.var_fmt_csv),
                                 ("png",      self.var_fmt_png),
-                                ("pixinsight", self.var_fmt_js)]
+                                ("pixinsight", self.var_fmt_js),
+                                ("skymap",     self.var_fmt_sky)]
                 if v.get()
             ],
             "modules_enabled": [i for i in range(1, 6) if self.var_mod[i].get()],
@@ -488,6 +511,8 @@ class AstroAnalyzerApp(tk.Tk):
                         modules_enabled = cfg["modules_enabled"],
                         progress_cb     = cb,
                         obsidian_path   = cfg["obsidian_path"],
+                        dither_active   = cfg["dither_active"],
+                        dither_px       = cfg["dither_px"],
                     )
 
                 self.progress_queue.put(("done", last_res))

@@ -19,6 +19,8 @@ def run_pipeline(
     modules_enabled: list = None,   # [1,2,3,4,5]
     progress_cb=None,
     obsidian_path: str | None = None,
+    dither_active: bool = True,
+    dither_px: int = 0,
 ) -> dict:
     """
     Zentrale Pipeline. Gibt dict mit allen Ergebnissen zurück.
@@ -90,6 +92,7 @@ def run_pipeline(
         from modules.m2_aufnahmetechnik import run as m2_run, empfehlungen
         r1_for_m2 = results.get("m1", {})
         r2 = m2_run(meta, r1_for_m2, n_subs_override=n_subs,
+                    dither_active=dither_active, dither_px=dither_px,
                     progress_cb=lambda p, m: pg(30 + p*0.10, m))
         results["m2"] = r2
         results["m2_empfehlungen"] = empfehlungen(r2, r1_for_m2)
@@ -189,6 +192,16 @@ def run_pipeline(
                m3=results.get("m3",[]), m4=results.get("m4",{}),
                meta=meta, output_path=js_path)
         written.append(js_path); results["js_path"] = js_path
+
+    if "skymap" in output_formats:
+        pg(98, "Himmelskarte …")
+        from modules.m7_skymap import run as m7_run
+        sky_path = os.path.join(output_dir, f"{base}_Skymap.png")
+        m7_run(meta, wcs,
+               (meta.get("HEIGHT", 6388), meta.get("WIDTH", 9576)),
+               sky_path, progress_cb=lambda p, m: pg(98 + p*0.02, m))
+        written.append(sky_path)
+        results["sky_path"] = sky_path
 
     results["written_files"] = written
     pg(100, f"Fertig. {len(written)} Dateien geschrieben.")

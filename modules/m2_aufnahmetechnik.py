@@ -23,6 +23,7 @@ GENERIC_GAIN_HINWEIS = {
 
 
 def run(meta: dict, img_stats: dict, n_subs_override: int = 0,
+        dither_active: bool = True, dither_px: int = 0,
         progress_cb=None) -> dict:
     """
     meta          : Header-Dict aus xisf_reader
@@ -105,28 +106,63 @@ def run(meta: dict, img_stats: dict, n_subs_override: int = 0,
 
     # ── Dithering-Diagnose ─────────────────────────────────────────────────
     pg(65, "Dithering analysieren …")
-    dither_ratio = banding / stack_noise_floor if stack_noise_floor > 0 else 0
-    if dither_ratio > 2.0:
-        dither_status = "❌"; dither_hinweis = (
-            f"Pattern dominiert Stack-Rauschen um {dither_ratio:.1f}×. "
-            "Dither-Amplitude auf ≥ 30 px (pseudo-random) erhöhen. "
-            "Ohne Dithering summieren sich Artefakte trotz hoher Sub-Anzahl."
-        )
-    elif dither_ratio > 0.5:
-        dither_status = "⚠️"; dither_hinweis = (
-            f"Pattern {dither_ratio:.1f}× Stack-Rauschen — Dither-Amplitude erhöhen (≥ 15–20 px)."
-        )
-    else:
-        dither_status = "✅"; dither_hinweis = "Dithering wirksam."
+    stack_floor  = stack_noise_floor
+    dither_ratio = banding / stack_floor if stack_floor > 0 else 0
 
-    results["dithering"] = {
-        "banding_amp":   round(banding, 6),
-        "stack_floor":   round(stack_noise_floor, 6),
-        "ratio":         round(dither_ratio, 2),
-        "status":        dither_status,
-        "hinweis":       dither_hinweis,
-        "empfehlung_px": 30 if dither_ratio > 2 else (20 if dither_ratio > 0.5 else 10),
-    }
+    if not dither_active:
+        results["dithering"] = {
+            "banding_amp":      round(banding, 6),
+            "stack_floor":      round(stack_floor, 6),
+            "ratio":            round(dither_ratio, 2),
+            "status":           "❌ deaktiviert",
+            "hinweis":          "Kein Dithering aktiv — Banding akkumuliert sich im Stack.",
+            "empfehlung_px":    20,
+            "manuell_gesetzt":  True,
+            "dither_px":        0,
+        }
+    elif dither_px > 0:
+        if dither_px >= 20:
+            st   = "✅ ausreichend"
+            hint = f"Dither-Amplitude {dither_px} px — gut gewählt."
+        elif dither_px >= 10:
+            st   = "⚠️ knapp"
+            hint = f"Dither-Amplitude {dither_px} px — Banding-Periode prüfen, ggf. auf ≥ 20 px erhöhen."
+        else:
+            st   = "❌ zu klein"
+            hint = f"Dither-Amplitude {dither_px} px — zu klein, Muster dekorreliert nicht zuverlässig."
+        results["dithering"] = {
+            "banding_amp":      round(banding, 6),
+            "stack_floor":      round(stack_floor, 6),
+            "ratio":            round(dither_ratio, 2),
+            "status":           st,
+            "hinweis":          hint,
+            "empfehlung_px":    max(20, dither_px),
+            "manuell_gesetzt":  True,
+            "dither_px":        dither_px,
+        }
+    else:
+        if dither_ratio > 2.0:
+            dither_status  = "❌"
+            dither_hinweis = (
+                f"Pattern dominiert Stack-Rauschen um {dither_ratio:.1f}×. "
+                f"Dither auf ≥ 30 px erhöhen."
+            )
+        elif dither_ratio > 0.5:
+            dither_status  = "⚠️"
+            dither_hinweis = f"Pattern {dither_ratio:.1f}× Stack-Rauschen — Amplitude erhöhen (≥ 15–20 px)."
+        else:
+            dither_status  = "✅"
+            dither_hinweis = "Dithering wirksam."
+        results["dithering"] = {
+            "banding_amp":      round(banding, 6),
+            "stack_floor":      round(stack_floor, 6),
+            "ratio":            round(dither_ratio, 2),
+            "status":           dither_status,
+            "hinweis":          dither_hinweis,
+            "empfehlung_px":    30 if dither_ratio > 2 else (20 if dither_ratio > 0.5 else 10),
+            "manuell_gesetzt":  False,
+            "dither_px":        0,
+        }
 
     # ── Temperatur ─────────────────────────────────────────────────────────
     pg(80, "Thermische Bewertung …")
