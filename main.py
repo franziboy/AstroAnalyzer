@@ -554,7 +554,10 @@ class AstroAnalyzerApp(tk.Tk):
                        ("Alle","*.*")])
         if p: var.set(p)
 
-    def _browse_light(self):    self._browse_xisf(self.var_light)
+    def _browse_light(self):
+        self._browse_xisf(self.var_light)
+        if self.var_light.get() and not self.var_output.get():
+            self.var_output.set(str(Path(self.var_light.get()).parent))
     def _browse_dark(self):     self._browse_xisf(self.var_dark)
     def _browse_flat(self):     self._browse_xisf(self.var_flat)
     def _browse_flatdark(self): self._browse_xisf(self.var_flatdark)
@@ -587,6 +590,8 @@ class AstroAnalyzerApp(tk.Tk):
         folder = filedialog.askdirectory(title="Ordner mit Master-Dateien wählen")
         if not folder:
             return
+        if not self.var_output.get():
+            self.var_output.set(folder)
 
         EXTS = {".xisf", ".fits", ".fit", ".fts"}
         files = sorted(p for p in Path(folder).iterdir() if p.suffix.lower() in EXTS)
@@ -634,6 +639,39 @@ class AstroAnalyzerApp(tk.Tk):
             else:
                 unknown.append((f, f"IMAGETYP={typ_raw!r}"))
 
+        # EXPTIME aus erstem Light/Flat lesen für Dark-Matching
+        light_exptime = None
+        flat_exptime  = None
+        if found["light"]:
+            first_light = next(iter(next(iter(found["light"].values()))))
+            try:
+                hdr = load_master_header(str(first_light))
+                t = hdr.get("EXPTIME")
+                if t: light_exptime = float(t)
+            except Exception:
+                pass
+        if found["flat"]:
+            first_flat = next(iter(next(iter(found["flat"].values()))))
+            try:
+                hdr = load_master_header(str(first_flat))
+                t = hdr.get("EXPTIME")
+                if t: flat_exptime = float(t)
+            except Exception:
+                pass
+
+        def best_dark(candidates: list, target_exp) -> "Path | None":
+            if not candidates: return None
+            if target_exp is None: return candidates[0]
+            for p in candidates:
+                try:
+                    hdr = load_master_header(str(p))
+                    t = float(hdr.get("EXPTIME") or 0)
+                    if abs(t - target_exp) < 1.0:
+                        return p
+                except Exception:
+                    pass
+            return candidates[0]
+
         if not any(found.values()):
             detail = "\n".join(f"{p.name}: {info}" for p, info in unknown[:10])
             messagebox.showwarning(
@@ -672,17 +710,23 @@ class AstroAnalyzerApp(tk.Tk):
                     return
                 chosen_flat = picked[0][1] if isinstance(picked, list) else picked
 
-        chosen_dark     = next(iter(next(iter(found["dark"].values()), [])), None) if found["dark"] else None
-        chosen_flatdark = next(iter(next(iter(found["flatdark"].values()), [])), None) if found["flatdark"] else None
+        all_darks     = [p for pl in found["dark"].values()     for p in pl]
+        all_flatdarks = [p for pl in found["flatdark"].values() for p in pl]
+        chosen_dark     = best_dark(all_darks,     light_exptime)
+        chosen_flatdark = best_dark(all_flatdarks, flat_exptime)
 
         msg = []
         if self.multi_lights:
             msg.append(f"Light:     Alle Filter — {', '.join(f for f,_ in self.multi_lights)}")
         elif chosen_light:
             msg.append(f"Light:     {Path(str(chosen_light)).name}")
-        if chosen_dark:     msg.append(f"Dark:      {chosen_dark.name}")
+        if chosen_dark:
+            exp_str = f" ({light_exptime:.0f}s)" if light_exptime else ""
+            msg.append(f"Dark:      {chosen_dark.name}{exp_str}")
         if chosen_flat:     msg.append(f"Flat:      {Path(str(chosen_flat)).name}")
-        if chosen_flatdark: msg.append(f"FlatDark:  {chosen_flatdark.name}")
+        if chosen_flatdark:
+            exp_str = f" ({flat_exptime:.2f}s)" if flat_exptime else ""
+            msg.append(f"FlatDark:  {chosen_flatdark.name}{exp_str}")
         if unknown:         msg.append(f"Unbekannt: {len(unknown)} Datei(en)")
 
         if not messagebox.askokcancel("Zuordnung bestätigen",
